@@ -33,6 +33,18 @@ async function getSettings() {
   return data;
 }
 
+export async function getLikes() {
+  const { data } = await supabase.from("song_likes").select("song_id");
+
+  const counts: Record<number, number> = {};
+
+  (data ?? []).forEach((item) => {
+    counts[item.song_id] = (counts[item.song_id] ?? 0) + 1;
+  });
+
+  return counts;
+}
+
 export async function getState() {
   const settings = await getSettings();
 
@@ -136,7 +148,9 @@ export async function addSong(
     .select()
     .single();
 
-  if (error) return { error: error.message };
+  if (error) {
+    return { error: error.message };
+  }
 
   return data;
 }
@@ -183,7 +197,9 @@ export async function playNextSong() {
     .limit(1)
     .maybeSingle();
 
-  if (!nextSong) return getState();
+  if (!nextSong) {
+    return getState();
+  }
 
   await supabase
     .from("songs")
@@ -281,7 +297,9 @@ export async function moveSong(id: number, direction: Direction) {
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
-  if (!songs) return getState();
+  if (!songs) {
+    return getState();
+  }
 
   const index = songs.findIndex((song) => song.id === id);
   const targetIndex = direction === "up" ? index - 1 : index + 1;
@@ -317,4 +335,27 @@ export async function reorderSongs(ids: number[]) {
   );
 
   return getState();
+}
+
+export async function toggleLike(songId: number, userKey: string) {
+  const { data: existing } = await supabase
+    .from("song_likes")
+    .select("id")
+    .eq("song_id", songId)
+    .eq("user_key", userKey)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase
+      .from("song_likes")
+      .delete()
+      .eq("id", existing.id);
+  } else {
+    await supabase.from("song_likes").insert({
+      song_id: songId,
+      user_key: userKey,
+    });
+  }
+
+  return getLikes();
 }

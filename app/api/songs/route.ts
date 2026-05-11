@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {
   addSong,
   deleteSong,
+  getLikes,
   getState,
   moveSong,
   playNextSong,
@@ -11,12 +12,19 @@ import {
   resetAllSongs,
   setCloseTimer,
   skipSong,
+  toggleLike,
   toggleRequest,
   updateSettings,
 } from "@/lib/songStore";
 
 export async function GET() {
-  return NextResponse.json(await getState());
+  const state = await getState();
+  const likes = await getLikes();
+
+  return NextResponse.json({
+    ...state,
+    likes,
+  });
 }
 
 export async function POST(request: Request) {
@@ -83,6 +91,12 @@ export async function POST(request: Request) {
   if (body.action === "reorder") {
     return NextResponse.json(await reorderSongs(body.ids));
   }
+
+if (body.action === "like") {
+  return NextResponse.json(
+    await toggleLike(body.songId, body.userKey)
+  );
+}
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
 }

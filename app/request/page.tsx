@@ -61,7 +61,15 @@ function formatDuration(sec?: number) {
 }
 
 function getUserColor(name: string) {
-  const colors = ["#818cf8", "#f472b6", "#34d399", "#fbbf24", "#60a5fa", "#c084fc", "#fb7185"];
+  const colors = [
+    "#818cf8",
+    "#f472b6",
+    "#34d399",
+    "#fbbf24",
+    "#60a5fa",
+    "#c084fc",
+    "#fb7185",
+  ];
 
   let total = 0;
 
@@ -81,7 +89,9 @@ export default function RequestPage() {
 
   const [results, setResults] = useState<YoutubeResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [submittingVideoId, setSubmittingVideoId] = useState<string | null>(null);
+  const [submittingVideoId, setSubmittingVideoId] = useState<string | null>(
+    null
+  );
 
   const [isRequestOpen, setIsRequestOpen] = useState(true);
   const [requestCloseAt, setRequestCloseAt] = useState<string | null>(null);
@@ -92,6 +102,9 @@ export default function RequestPage() {
   const [currentSong, setCurrentSong] = useState<SongRequest | null>(null);
 
   const [likes, setLikes] = useState<Record<number, number>>({});
+  const [likedSongIds, setLikedSongIds] = useState<number[]>([]);
+  const [userKey, setUserKey] = useState("");
+
   const [newQueueFlash, setNewQueueFlash] = useState(false);
   const [lastQueueCount, setLastQueueCount] = useState(0);
   const [now, setNow] = useState(Date.now());
@@ -156,7 +169,9 @@ export default function RequestPage() {
     setMessage("");
 
     try {
-      const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(song)}`);
+      const res = await fetch(
+        `/api/youtube/search?q=${encodeURIComponent(song)}`
+      );
       const data = await res.json();
 
       setResults(data ?? []);
@@ -222,16 +237,28 @@ export default function RequestPage() {
   }
 
   async function toggleLike(songId: number) {
+    if (!userKey) return;
+
+    const isLiked = likedSongIds.includes(songId);
+
+    const nextLikedSongIds = isLiked
+      ? likedSongIds.filter((id) => id !== songId)
+      : [...likedSongIds, songId];
+
     const res = await fetch("/api/songs", {
       method: "POST",
       body: JSON.stringify({
         action: "like",
         songId,
+        userKey,
       }),
     });
 
     const data = await res.json();
+
     setLikes(data);
+    setLikedSongIds(nextLikedSongIds);
+    localStorage.setItem("likedSongIds", JSON.stringify(nextLikedSongIds));
   }
 
   const closeCountdown = useMemo(() => {
@@ -258,14 +285,30 @@ export default function RequestPage() {
   }, [queue, history]);
 
   const popularSongs = useMemo(() => {
-    return [...queue].sort((a, b) => (likes[b.id] ?? 0) - (likes[a.id] ?? 0)).slice(0, 5);
+    return [...queue]
+      .sort((a, b) => (likes[b.id] ?? 0) - (likes[a.id] ?? 0))
+      .slice(0, 5);
   }, [queue, likes]);
 
   useEffect(() => {
     const savedRequester = localStorage.getItem("requesterName");
+    const savedLikedSongIds = localStorage.getItem("likedSongIds");
+
+    let savedUserKey = localStorage.getItem("userKey");
+
+    if (!savedUserKey) {
+      savedUserKey = crypto.randomUUID();
+      localStorage.setItem("userKey", savedUserKey);
+    }
+
+    setUserKey(savedUserKey);
 
     if (savedRequester) {
       setRequester(savedRequester);
+    }
+
+    if (savedLikedSongIds) {
+      setLikedSongIds(JSON.parse(savedLikedSongIds));
     }
 
     loadState();
@@ -275,15 +318,27 @@ export default function RequestPage() {
 
     const channel = supabase
       .channel("request-page-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "songs" }, () => {
-        loadState();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "settings" }, () => {
-        loadState();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "song_likes" }, () => {
-        loadState();
-      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "songs" },
+        () => {
+          loadState();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "settings" },
+        () => {
+          loadState();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "song_likes" },
+        () => {
+          loadState();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -561,7 +616,11 @@ export default function RequestPage() {
 
         .nowPlaying {
           padding: 24px;
-          background: linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(236, 72, 153, 0.14));
+          background: linear-gradient(
+            135deg,
+            rgba(99, 102, 241, 0.28),
+            rgba(236, 72, 153, 0.14)
+          );
           border: 1px solid rgba(167, 139, 250, 0.5);
           box-shadow: 0 0 40px rgba(139, 92, 246, 0.22);
         }
@@ -829,22 +888,30 @@ export default function RequestPage() {
               ● {isRequestOpen ? "신청 가능" : "신청 마감"}
             </div>
 
-            {closeCountdown && <div className="pill pillInfo">⏱ 마감까지 {closeCountdown}</div>}
+            {closeCountdown && (
+              <div className="pill pillInfo">⏱ 마감까지 {closeCountdown}</div>
+            )}
 
-            <div className="pill pillInfo">⏳ 최대 {Math.floor(maxDurationSec / 60)}분 신청 가능</div>
+            <div className="pill pillInfo">
+              ⏳ 최대 {Math.floor(maxDurationSec / 60)}분 신청 가능
+            </div>
           </div>
         </section>
 
         <div className="tabBar">
           <button
-            className={`tabButton ${activeTab === "request" ? "tabButtonActive" : ""}`}
+            className={`tabButton ${
+              activeTab === "request" ? "tabButtonActive" : ""
+            }`}
             onClick={() => setActiveTab("request")}
           >
             신청하기
           </button>
 
           <button
-            className={`tabButton ${activeTab === "community" ? "tabButtonActive" : ""}`}
+            className={`tabButton ${
+              activeTab === "community" ? "tabButtonActive" : ""
+            }`}
             onClick={() => setActiveTab("community")}
           >
             커뮤니티
@@ -878,21 +945,37 @@ export default function RequestPage() {
                   style={{ marginBottom: 0 }}
                 />
 
-                <button className="button" disabled={!isRequestOpen || isSearching} onClick={searchYoutube}>
+                <button
+                  className="button"
+                  disabled={!isRequestOpen || isSearching}
+                  onClick={searchYoutube}
+                >
                   {isSearching && <span className="spinner" />}
-                  {!isRequestOpen ? "마감" : isSearching ? "검색 중..." : "검색"}
+                  {!isRequestOpen
+                    ? "마감"
+                    : isSearching
+                    ? "검색 중..."
+                    : "검색"}
                 </button>
               </div>
 
               {message && (
-                <div className={`message ${message.startsWith("❌") ? "messageError" : "messageOk"}`}>
+                <div
+                  className={`message ${
+                    message.startsWith("❌") ? "messageError" : "messageOk"
+                  }`}
+                >
                   {message}
                 </div>
               )}
 
               <section className="resultList">
                 {results.length === 0 ? (
-                  <div className="emptyBox">{isSearching ? "검색 중입니다..." : "검색 결과가 여기에 표시됩니다."}</div>
+                  <div className="emptyBox">
+                    {isSearching
+                      ? "검색 중입니다..."
+                      : "검색 결과가 여기에 표시됩니다."}
+                  </div>
                 ) : (
                   results.map((item) => {
                     const duplicated = isDuplicatedRequest(item);
@@ -900,20 +983,43 @@ export default function RequestPage() {
 
                     return (
                       <div key={item.videoId} className="resultCard">
-                        <img className="resultThumb" src={item.thumbnail} alt={item.title} />
+                        <img
+                          className="resultThumb"
+                          src={item.thumbnail}
+                          alt={item.title}
+                        />
 
                         <div style={{ flex: 1 }}>
-                          <h3 className="titleClamp" style={{ margin: "0 0 8px", fontSize: "18px", lineHeight: 1.4 }}>
+                          <h3
+                            className="titleClamp"
+                            style={{
+                              margin: "0 0 8px",
+                              fontSize: "18px",
+                              lineHeight: 1.4,
+                            }}
+                          >
                             {item.title}
                           </h3>
 
-                          <p style={{ color: "#94a3b8", margin: "0 0 10px" }}>{item.channelTitle}</p>
+                          <p style={{ color: "#94a3b8", margin: "0 0 10px" }}>
+                            {item.channelTitle}
+                          </p>
 
-                          <p style={{ color: "#cbd5e1", margin: "0 0 14px" }}>⏱ {formatDuration(item.durationSec)}</p>
+                          <p style={{ color: "#cbd5e1", margin: "0 0 14px" }}>
+                            ⏱ {formatDuration(item.durationSec)}
+                          </p>
 
-                          <button className="button" disabled={duplicated || submitting} onClick={() => submitSong(item)}>
+                          <button
+                            className="button"
+                            disabled={duplicated || submitting}
+                            onClick={() => submitSong(item)}
+                          >
                             {submitting && <span className="spinner" />}
-                            {duplicated ? "이미 신청됨" : submitting ? "신청 중..." : "🎵 이 곡 신청"}
+                            {duplicated
+                              ? "이미 신청됨"
+                              : submitting
+                              ? "신청 중..."
+                              : "🎵 이 곡 신청"}
                           </button>
                         </div>
                       </div>
@@ -925,21 +1031,41 @@ export default function RequestPage() {
 
             <aside className="sidePanel">
               <section className={`glass ${currentSong ? "nowPlaying" : "nowIdle"}`}>
-                <p style={{ color: "#c4b5fd", margin: "0 0 12px", fontWeight: 800 }}>NOW PLAYING</p>
+                <p
+                  style={{
+                    color: "#c4b5fd",
+                    margin: "0 0 12px",
+                    fontWeight: 800,
+                  }}
+                >
+                  NOW PLAYING
+                </p>
 
-                <h2 style={{ margin: "0 0 16px", fontSize: "22px" }}>현재 재생중인 노래</h2>
+                <h2 style={{ margin: "0 0 16px", fontSize: "22px" }}>
+                  현재 재생중인 노래
+                </h2>
 
                 {currentSong ? (
                   <div>
                     {getThumbnail(currentSong) && (
-                      <img className="nowThumb" src={getThumbnail(currentSong)!} alt={getTitle(currentSong)} />
+                      <img
+                        className="nowThumb"
+                        src={getThumbnail(currentSong)!}
+                        alt={getTitle(currentSong)}
+                      />
                     )}
 
-                    <h3 className="titleClamp" style={{ margin: "0 0 10px", lineHeight: 1.45 }}>
+                    <h3
+                      className="titleClamp"
+                      style={{ margin: "0 0 10px", lineHeight: 1.45 }}
+                    >
                       {getTitle(currentSong)}
                     </h3>
 
-                    <span className="userBadge" style={{ color: getUserColor(currentSong.requester) }}>
+                    <span
+                      className="userBadge"
+                      style={{ color: getUserColor(currentSong.requester) }}
+                    >
                       👤 {currentSong.requester}
                     </span>
 
@@ -957,9 +1083,19 @@ export default function RequestPage() {
               <section className={`queuePanel glass ${newQueueFlash ? "queueFlash" : ""}`}>
                 <div className="queueHeader">
                   <div>
-                    <p style={{ color: "#a5b4fc", margin: "0 0 8px", fontWeight: 800 }}>QUEUE</p>
+                    <p
+                      style={{
+                        color: "#a5b4fc",
+                        margin: "0 0 8px",
+                        fontWeight: 800,
+                      }}
+                    >
+                      QUEUE
+                    </p>
 
-                    <h2 style={{ margin: 0, fontSize: "22px" }}>신청곡 대기열</h2>
+                    <h2 style={{ margin: 0, fontSize: "22px" }}>
+                      신청곡 대기열
+                    </h2>
                   </div>
 
                   <strong className="pill pillInfo">{queue.length}곡</strong>
@@ -973,32 +1109,57 @@ export default function RequestPage() {
                   <div className="queueList">
                     {queue.map((item, index) => {
                       const thumbnail = getThumbnail(item);
+                      const isLiked = likedSongIds.includes(item.id);
 
                       return (
                         <div key={item.id} className="queueCard">
                           {thumbnail ? (
-                            <img className="queueThumb" src={thumbnail} alt={getTitle(item)} />
+                            <img
+                              className="queueThumb"
+                              src={thumbnail}
+                              alt={getTitle(item)}
+                            />
                           ) : (
                             <div className="queueThumb" />
                           )}
 
                           <div style={{ minWidth: 0 }}>
-                            <p style={{ color: "#818cf8", margin: "0 0 4px", fontWeight: 900, fontSize: "13px" }}>
+                            <p
+                              style={{
+                                color: "#818cf8",
+                                margin: "0 0 4px",
+                                fontWeight: 900,
+                                fontSize: "13px",
+                              }}
+                            >
                               #{index + 1} · ⏱ {formatDuration(item.duration_sec)}
                             </p>
 
-                            <h3 className="titleClamp" style={{ margin: "0 0 5px", fontSize: "14px", lineHeight: 1.35 }}>
+                            <h3
+                              className="titleClamp"
+                              style={{
+                                margin: "0 0 5px",
+                                fontSize: "14px",
+                                lineHeight: 1.35,
+                              }}
+                            >
                               {getTitle(item)}
                             </h3>
 
-                            <span className="userBadge" style={{ color: getUserColor(item.requester) }}>
+                            <span
+                              className="userBadge"
+                              style={{ color: getUserColor(item.requester) }}
+                            >
                               👤 {item.requester}
                             </span>
 
                             <br />
 
-                            <button className="likeButton" onClick={() => toggleLike(item.id)}>
-                              🤍 {likes[item.id] ?? 0}
+                            <button
+                              className="likeButton"
+                              onClick={() => toggleLike(item.id)}
+                            >
+                              {isLiked ? "💜" : "🤍"} {likes[item.id] ?? 0}
                             </button>
                           </div>
                         </div>
@@ -1019,19 +1180,28 @@ export default function RequestPage() {
               {popularSongs.length === 0 ? (
                 <div className="emptyBox">아직 인기 신청곡이 없습니다.</div>
               ) : (
-                popularSongs.map((item, index) => (
-                  <div key={item.id} className="rankItem">
-                    <strong>
-                      #{index + 1} {getTitle(item)}
-                    </strong>
+                popularSongs.map((item, index) => {
+                  const isLiked = likedSongIds.includes(item.id);
 
-                    <p style={{ color: "#94a3b8", margin: "8px 0" }}>신청자: {item.requester}</p>
+                  return (
+                    <div key={item.id} className="rankItem">
+                      <strong>
+                        #{index + 1} {getTitle(item)}
+                      </strong>
 
-                    <button className="likeButton" onClick={() => toggleLike(item.id)}>
-                      🤍 {likes[item.id] ?? 0}
-                    </button>
-                  </div>
-                ))
+                      <p style={{ color: "#94a3b8", margin: "8px 0" }}>
+                        신청자: {item.requester}
+                      </p>
+
+                      <button
+                        className="likeButton"
+                        onClick={() => toggleLike(item.id)}
+                      >
+                        {isLiked ? "💜" : "🤍"} {likes[item.id] ?? 0}
+                      </button>
+                    </div>
+                  );
+                })
               )}
             </section>
 
@@ -1049,7 +1219,9 @@ export default function RequestPage() {
                       #{index + 1} {name}
                     </strong>
 
-                    <p style={{ color: "#94a3b8", margin: "8px 0 0" }}>신청 {count}회</p>
+                    <p style={{ color: "#94a3b8", margin: "8px 0 0" }}>
+                      신청 {count}회
+                    </p>
                   </div>
                 ))
               )}
@@ -1071,7 +1243,9 @@ export default function RequestPage() {
               <div style={{ height: 16 }} />
 
               <div className="noticeCard">
-                {isRequestOpen ? "지금은 신청곡을 받고 있어요." : "현재 신청곡 접수가 마감되었습니다."}
+                {isRequestOpen
+                  ? "지금은 신청곡을 받고 있어요."
+                  : "현재 신청곡 접수가 마감되었습니다."}
                 {closeCountdown ? ` 마감까지 ${closeCountdown} 남았습니다.` : ""}
               </div>
             </section>
