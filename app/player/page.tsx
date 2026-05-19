@@ -82,6 +82,15 @@ export default function PlayerPage() {
     await loadSong();
   }
 
+  async function skipSong() {
+  await fetch("/api/songs", {
+    method: "POST",
+    body: JSON.stringify({ action: "skip" }),
+  });
+
+  await loadSong();
+}
+
   useEffect(() => {
     if (!isLoggedIn) return;
 
@@ -274,6 +283,47 @@ export default function PlayerPage() {
           </button>
         </div>
       )}
+
+      <div
+  style={{
+    position: "fixed",
+    top: "20px",
+    right: "20px",
+    zIndex: 9998,
+    display: "flex",
+    gap: "10px",
+  }}
+>
+  <button
+    onClick={playNext}
+    style={{
+      padding: "12px 18px",
+      borderRadius: "14px",
+      border: "none",
+      background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+      color: "white",
+      fontWeight: 800,
+      cursor: "pointer",
+    }}
+  >
+    ▶️ 재생
+  </button>
+
+  <button
+    onClick={skipSong}
+    style={{
+      padding: "12px 18px",
+      borderRadius: "14px",
+      border: "none",
+      background: "linear-gradient(135deg, #ef4444, #dc2626)",
+      color: "white",
+      fontWeight: 800,
+      cursor: "pointer",
+    }}
+  >
+    ⏭️ 스킵
+  </button>
+</div>
 
       {currentSong && videoId ? (
         <div

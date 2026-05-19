@@ -147,12 +147,6 @@ export default function RequestPage() {
     return duplicatedInQueue || duplicatedCurrent;
   }
 
-  function isCooldownActive() {
-    const lastRequestAt = Number(localStorage.getItem("lastRequestAt") ?? 0);
-    const diff = Date.now() - lastRequestAt;
-
-    return diff < 30 * 1000;
-  }
 
   async function searchYoutube() {
     if (!song.trim()) {
@@ -193,11 +187,6 @@ export default function RequestPage() {
       return;
     }
 
-    if (isCooldownActive()) {
-      setMessage("❌ 너무 빠르게 신청하고 있어요. 잠시 후 다시 시도해주세요.");
-      return;
-    }
-
     setSubmittingVideoId(item.videoId);
 
     try {
@@ -223,7 +212,6 @@ export default function RequestPage() {
       if (data.error) {
         setMessage(`❌ ${data.error}`);
       } else {
-        localStorage.setItem("lastRequestAt", String(Date.now()));
         const position = queue.length + 1;
         setMessage(`🎉 신청 완료! 현재 예상 대기 순번은 ${position}번째입니다.`);
       }
